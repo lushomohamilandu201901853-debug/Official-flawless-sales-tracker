@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Flawless Salon & Barbershop — Sales Tracker</title>
+  <meta name="description" content="Flawless Salon & Barbershop: daily sales tracker with Firebase cloud sync (refresh sync) and PDF export." />
+  <style>
+    :root{
+      --blue:#0d47a1;
+      --red:#d32f2f;
+      --light:#f7f9fc;
+      --text:#1f2937;
+      --muted:#6b7280;
+      --ring: rgba(13, 71, 161, .25);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:var(--light);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,"Noto Sans";}
+    .container{max-width:1000px;margin:0 auto;padding:24px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 10px 30px rgba(2,6,23,.08);padding:20px;margin:16px 0;border:1px solid #eef1f6}
+    .title{font-size:clamp(22px, 2.4vw, 32px);font-weight:800;margin:4px 0 8px}
+    .subtitle{color:var(--muted);margin-top:0}
+    .brand{display:flex;align-items:center;gap:10px}
+    .logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--blue),var(--red));display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900}
+    .badge{padding:2px 8px;border-radius:999px;background:rgba(211,47,47,.08);color:var(--red);font-weight:600;font-size:12px;border:1px solid rgba(211,47,47,.2)}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .col{flex:1 1 250px}
+    label{display:block;font-size:14px;margin:8px 0 4px}
+    input, select, button, textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #e5e7eb;background:#fff;color:var(--text);outline:none;transition:.15s}
+    input:focus, select:focus, textarea:focus{border-color:var(--blue);box-shadow:0 0 0 4px var(--ring)}
+    button{cursor:pointer;border:none}
+    .btn{background:var(--blue);color:#fff;font-weight:700}
+    .btn.secondary{background:var(--red)}
+    .btn.ghost{background:#fff;border:1px solid #e5e7eb;color:var(--text)}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    table{width:100%;border-collapse:collapse;border-spacing:0}
+    th, td{padding:10px 8px;border-bottom:1px solid #eef2f7;text-align:left;font-size:14px}
+    th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+    .pill{display:inline-block;padding:4px 10px;background:rgba(13,71,161,.08);border:1px solid rgba(13,71,161,.2);border-radius:999px;color:var(--blue);font-weight:700;font-size:12px}
+    .toolbar{display:flex;gap:10px;flex-wrap:wrap}
+    .footer{margin-top:40px;color:var(--muted);font-size:13px;text-align:center}
+    .nav{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .nav button{flex:1}
+    .hidden{display:none !important}
+    .totals{font-weight:800}
+    .divider{height:1px;background:#eef1f6;margin:18px 0}
+    .right{float:right}
+    .small{font-size:12px;color:var(--muted)}
+    .delete-btn{background:var(--red);color:white;padding:6px 12px;border-radius:6px;font-size:12px;cursor:pointer;border:none;transition:opacity 0.2s}
+    .delete-btn:hover{opacity:0.8}
+    .default-pw-info {margin-top: 16px; padding: 12px; background-color: #f9fafb; border-radius: 8px; border-left: 4px solid var(--blue);}
+  </style>
+  <!-- jsPDF for PDF export -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-7bBqQv+K9R3f3+Y1xgTo3t5R7C6OexXxOqQ2tg8b3B1sQe0oNqYbV5b+0Vwq3A5P6Bf7u3e3Sgkq2q8xW1V+7Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+</head>
+<body>
+  <div class="container">
+    <div class="brand">
+      <div class="logo">FS</div>
+      <div>
+        <div class="title">Flawless Salon &amp; Barbershop — Sales Tracker</div>
+        <div class="subtitle">Blue &amp; Red theme • Currency: <span class="pill">ZMW (Kwacha)</span></div>
+      </div>
+      <span class="badge right" id="roleBadge">Logged out</span>
+    </div>
+
+    <!-- Login Card -->
+    <div id="loginCard" class="card">
+      <div class="title">Sign In</div>
+      <p class="subtitle">Choose your role and enter the password to continue.</p>
+      <div class="row">
+        <div class="col">
+          <label for="role">Role</label>
+          <select id="role">
+            <option value="worker">Worker</option>
+            <option value="owner">Owner</option>
+          </select>
+        </div>
+        <div class="col">
+          <label for="password">Password</label>
+          <input id="password" type="password" placeholder="Enter password" />
+        </div>
+      </div>
+      <div class="nav">
+        <button class="btn" id="loginBtn">Login</button>
+      </div>
+      <p class="small">Contact the owner if you've forgotten your password.</p>
+    </div>
+
+    <!-- Worker Panel -->
+    <div id="workerPanel" class="card hidden">
+      <div class="title">Worker Panel</div>
+      <p class="subtitle">Enter daily sales below. Your entries sync to the cloud (refresh to see latest across devices).</p>
+      <div class="row">
+        <div class="col">
+          <label for="saleDate">Date</label>
+          <input type="date" id="saleDate" />
+        </div>
+        <div class="col">
+          <label for="itemName">Item / Service</label>
+          <input type="text" id="itemName" placeholder="e.g., Haircut, Beard trim" />
+        </div>
+        <div class="col">
+          <label for="amount">Amount (ZMW)</label>
+          <input type="number" id="amount" min="0" step="0.01" placeholder="0.00" />
+        </div>
+      </div>
+      <div class="nav">
+        <button class="btn" id="addSaleBtn">Add Sale</button>
+        <button class="btn ghost" id="refreshWorkerBtn">Refresh Today's Entries</button>
+        <button class="btn ghost" id="logoutWorkerBtn">Logout</button>
+      </div>
+      <div class="divider"></div>
+      <h3>Today's Entries (from cloud)</h3>
+      <table>
+        <thead><tr><th>Date</th><th>Item</th><th>Amount (ZMW)</th></tr></thead>
+        <tbody id="todayTableBody"></tbody>
+        <tfoot><tr><td colspan="2" class="totals">Total Today</td><td class="totals" id="todayTotal">ZMW 0.00</td></tr></tfoot>
+      </table>
+    </div>
+
+    <!-- Owner Panel -->
+    <div id="ownerPanel" class="card hidden">
+      <div class="title">Owner Dashboard</div>
+      <p class="subtitle">Review all sales, filter by month, export to PDF, and manage passwords. Click "Refresh" to fetch latest cloud data.</p>
+
+      <div class="toolbar">
+        <div class="col">
+          <label for="filterMonth">Filter by Month</label>
+          <input type="month" id="filterMonth" />
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <button class="btn" id="applyFilterBtn">Apply Filter</button>
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <button class="btn secondary" id="downloadPdfBtn">Download PDF</button>
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <button class="btn ghost" id="refreshOwnerBtn">Refresh</button>
+        </div>
+        <div class="col">
+          <label>&nbsp;</label>
+          <button class="btn ghost" id="logoutOwnerBtn">Logout</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Worker</th><th>Item</th><th>Amount (ZMW)</th><th>Action</th></tr>
+        </thead>
+        <tbody id="allSalesTbody"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3" class="totals">Total (Filtered)</td>
+            <td class="totals" id="filteredTotal">ZMW 0.00</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <div class="divider"></div>
+
+      <h3>Password Management</h3>
+      <div class="row">
+        <div class="col">
+          <label for="newWorkerPw">New Worker Password</label>
+          <input id="newWorkerPw" type="text" placeholder="Enter new worker password" />
+        </div>
+        <div class="col">
+          <label for="newOwnerPw">New Owner Password</label>
+          <input id="newOwnerPw" type="text" placeholder="Enter new owner password" />
+        </div>
+      </div>
+      <div class="nav">
+        <button class="btn" id="savePwBtn">Save Passwords</button>
+        <button class="btn ghost" id="resetToDefaultsBtn" title="Reset passwords to defaults">Reset to Defaults</button>
+      </div>
+      
+      <div class="default-pw-info">
+        <p class="small"><strong>Default Passwords (Owner Only)</strong></p>
+        <p class="small">Worker: <strong>M0ses.com</strong> • Owner: <strong>W0rk!</strong></p>
+      </div>
+      
+      <p class="small info">Passwords are stored locally in your browser. Keep your deployment link private.</p>
+    </div>
+
+    <div class="footer">
+      &copy; 2025 Flawless Salon &amp; Barbershop • Currency: ZMW • Theme: Blue &amp; Red
+    </div>
+  </div>
+
+  <!-- Firebase modular SDK (browser) - using your provided config -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, where, orderBy, serverTimestamp, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+    // ---- Your Firebase config (provided) ----
+    const firebaseConfig = {
+      apiKey: "AIzaSyCjmtIR1w2rCTKXjXbxoFWud4sdqx85bmg",
+      authDomain: "flawless-salon-barbershop.firebaseapp.com",
+      projectId: "flawless-salon-barbershop",
+      storageBucket: "flawless-salon-barbershop.firebasestorage.app",
+      messagingSenderId: "37984982490",
+      appId: "1:37984982490:web:6597442cd21f909faf1ce3"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+
+    // ---------- Utilities ----------
+    const $ = (sel) => document.querySelector(sel);
+    const fmt = (n) => "ZMW " + (Number(n || 0).toFixed(2));
+
+    // local keys for passwords and worker name
+    const STORAGE_KEYS = {
+      workerPw: "pwWorkerV1",
+      ownerPw: "pwOwnerV1",
+      workerName: "workerNameV1"
+    };
+
+    function loadJSON(key, fallback){
+      try{ return JSON.parse(localStorage.getItem(key)) ?? fallback; }catch(e){ return fallback; }
+    }
+    function saveJSON(key, value){
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    // init default passwords
+    function ensureDefaults(){
+      if(!localStorage.getItem(STORAGE_KEYS.workerPw)){
+        localStorage.setItem(STORAGE_KEYS.workerPw, JSON.stringify("M0ses.com"));
+      }
+      if(!localStorage.getItem(STORAGE_KEYS.ownerPw)){
+        localStorage.setItem(STORAGE_KEYS.ownerPw, JSON.stringify("W0rk!"));
+      }
+    }
+    ensureDefaults();
+
+    let role = null;
+
+    // ---------- Login ----------
+    $("#loginBtn").addEventListener("click", async () => {
+      const r = $("#role").value;
+      const pw = $("#password").value.trim();
+      const workerPw = loadJSON(STORAGE_KEYS.workerPw, "M0ses.com");
+      const ownerPw  = loadJSON(STORAGE_KEYS.ownerPw, "W0rk!");
+
+      if((r === "worker" && pw === workerPw) || (r === "owner" && pw === ownerPw)){
+        role = r;
+        $("#loginCard").classList.add("hidden");
+        $("#roleBadge").textContent = r === "worker" ? "Worker" : "Owner";
+        if(r === "worker"){
+          $("#workerPanel").classList.remove("hidden");
+          // Ask worker name once
+          let name = loadJSON(STORAGE_KEYS.workerName, null);
+          if(!name){
+            name = prompt("Enter your name (to tag sales with a worker):") || "Worker";
+            saveJSON(STORAGE_KEYS.workerName, name);
+          }
+          $("#saleDate").valueAsDate = new Date();
+          // fetch today's entries from cloud
+          await fetchTodaysEntries();
+        }else{
+          $("#ownerPanel").classList.remove("hidden");
+          $("#filterMonth").value = new Date().toISOString().slice(0,7);
+          // initial fetch
+          await fetchFilteredSales();
+        }
+      }else{
+        alert("Incorrect password for selected role.");
+      }
+    });
+
+    // ---------- Firestore actions ----------
+    async function addSaleToCloud(sale){
+      try{
+        const col = collection(db, "sales");
+        await addDoc(col, {...sale, createdAt: serverTimestamp()});
+        return true;
+      }catch(e){
+        console.error("Error adding sale:", e);
+        alert("Failed to add sale to cloud. Check browser console and Firestore rules.");
+        return false;
+      }
+    }
+
+    async function deleteSaleFromCloud(saleId){
+      try{
+        await deleteDoc(doc(db, "sales", saleId));
+        return true;
+      }catch(e){
+        console.error("Error deleting sale:", e);
+        alert("Failed to delete sale from cloud. Check browser console and Firestore rules.");
+        return false;
+      }
+    }
+
+    async function fetchTodaysEntries(){
+      const today = new Date().toISOString().slice(0,10);
+      const col = collection(db, "sales");
+      // get all docs where date == today and order by createdAt if exists
+      try{
+        const q = query(col, where("date","==", today), orderBy("createdAt"));
+        const snap = await getDocs(q);
+        const data = [];
+        snap.forEach(d => data.push({...d.data(), id: d.id}));
+        renderTodayFromData(data);
+      }catch(e){
+        // if orderBy("createdAt") fails because field missing, fallback to get all and filter
+        console.warn(e);
+        try{
+          const snap = await getDocs(col);
+          const data = [];
+          snap.forEach(d => {
+            const doc = d.data();
+            if(doc.date === today) data.push({...doc, id: d.id});
+          });
+          renderTodayFromData(data);
+        }catch(err){
+          console.error("Fetch error:", err);
+          alert("Failed to fetch today's entries. See console.");
+        }
+      }
+    }
+
+    async function fetchFilteredSales(){
+      const m = $("#filterMonth").value || new Date().toISOString().slice(0,7); // YYYY-MM
+      const col = collection(db, "sales");
+      try{
+        const snap = await getDocs(col);
+        const data = [];
+        snap.forEach(d => {
+          const doc = d.data();
+          if(doc.date && doc.date.slice(0,7) === m) data.push({...doc, id: d.id});
+        });
+        renderOwnerTableWithData(data, m);
+      }catch(e){
+        console.error("Error fetching sales:", e);
+        alert("Failed to fetch sales. Check console and Firestore rules.");
+      }
+    }
+
+    // ---------- Worker actions ----------
+    $("#addSaleBtn").addEventListener("click", async () => {
+      const date = $("#saleDate").value || new Date().toISOString().slice(0,10);
+      const item = $("#itemName").value.trim();
+      const amount = parseFloat($("#amount").value);
+      if(!item){ alert("Please enter an item/service."); return; }
+      if(isNaN(amount)){ alert("Please enter a valid amount."); return; }
+
+      const worker = loadJSON(STORAGE_KEYS.workerName, "Worker");
+      const sale = { date, item, amount: Number(amount), worker };
+      const ok = await addSaleToCloud(sale);
+      if(ok){
+        $("#itemName").value = "";
+        $("#amount").value = "";
+        alert("Sale added to cloud.");
+        // refresh today's view
+        await fetchTodaysEntries();
+      }
+    });
+
+    $("#refreshWorkerBtn").addEventListener("click", fetchTodaysEntries);
+
+    function renderTodayFromData(data){
+      const tbody = $("#todayTableBody");
+      tbody.innerHTML = "";
+      let total = 0;
+      data.forEach(s => {
+        total += Number(s.amount || 0);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td>${s.date}</td><td>${s.item}</td><td>${fmt(s.amount)}</td>`;
+        tbody.appendChild(tr);
+      });
+      $("#todayTotal").textContent = fmt(total);
+    }
+
+    $("#logoutWorkerBtn").addEventListener("click", () => {
+      role = null;
+      $("#workerPanel").classList.add("hidden");
+      $("#loginCard").classList.remove("hidden");
+      $("#roleBadge").textContent = "Logged out";
+    });
+
+    // ---------- Owner actions ----------
+    $("#applyFilterBtn").addEventListener("click", fetchFilteredSales);
+    $("#refreshOwnerBtn").addEventListener("click", fetchFilteredSales);
+
+    function renderOwnerTableWithData(data, m){
+      const tbody = $("#allSalesTbody");
+      tbody.innerHTML = "";
+      let total = 0;
+      // sort by date asc
+      data.sort((a,b) => (a.date || "").localeCompare(b.date || ""));
+      data.forEach(s => {
+        total += Number(s.amount || 0);
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${s.date}</td>
+          <td>${s.worker || ""}</td>
+          <td>${s.item}</td>
+          <td>${fmt(s.amount)}</td>
+          <td><button class="delete-btn" data-id="${s.id}">Delete</button></td>
+        `;
+        tbody.appendChild(tr);
+      });
+      $("#filteredTotal").textContent = fmt(total);
+      
+      // Add event listeners to delete buttons
+      document.querySelectorAll(".delete-btn").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+          const saleId = e.target.getAttribute("data-id");
+          if(confirm("Are you sure you want to delete this sale record? This action cannot be undone.")) {
+            const success = await deleteSaleFromCloud(saleId);
+            if(success) {
+              alert("Sale record deleted successfully.");
+              await fetchFilteredSales(); // Refresh the table
+            }
+          }
+        });
+      });
+    }
+
+    $("#downloadPdfBtn").addEventListener("click", async () => {
+      // fetch current filtered data then export
+      await fetchFilteredSales();
+      const m = $("#filterMonth").value || new Date().toISOString().slice(0,7);
+      const rows = Array.from(document.querySelectorAll("#allSalesTbody tr")).map(tr => {
+        const tds = tr.querySelectorAll("td");
+        return {
+          date: tds[0]?.textContent || "",
+          worker: tds[1]?.textContent || "",
+          item: tds[2]?.textContent || "",
+          amount: tds[3]?.textContent.replace("ZMW","").trim() || "0"
+        };
+      });
+      const total = rows.reduce((acc,r) => acc + Number(r.amount.replace(/,/g,"")), 0);
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({orientation:"p", unit:"pt", format:"a4"});
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.text("Flawless Salon & Barbershop - Sales Report", 40, 40);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      doc.text(`Month: ${m}`, 40, 60);
+      doc.text(`Currency: ZMW`, 40, 75);
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 40, 90);
+
+      let y = 120;
+      doc.setFont("helvetica", "bold");
+      doc.text("Date", 40, y);
+      doc.text("Worker", 140, y);
+      doc.text("Item", 260, y);
+      doc.text("Amount (ZMW)", 460, y);
+      y += 12;
+      doc.setLineWidth(0.5);
+      doc.line(40, y, 555, y);
+      y += 16;
+
+      doc.setFont("helvetica", "normal");
+      rows.forEach(s => {
+        if(y > 760){
+          doc.addPage();
+          y = 60;
+        }
+        doc.text(String(s.date), 40, y);
+        doc.text(String(s.worker), 140, y);
+        doc.text(String(s.item), 260, y);
+        doc.text(String(Number(s.amount).toFixed(2)), 460, y);
+        y += 18;
+      });
+
+      y += 8;
+      doc.setLineWidth(0.5);
+      doc.line(40, y, 555, y);
+      y += 20;
+      doc.setFont("helvetica", "bold");
+      doc.text(`Total for ${m}: ZMW ${total.toFixed(2)}`, 40, y);
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "normal");
+      doc.text("© 2025 Flawless Salon & Barbershop", 40, 820);
+
+      doc.save(`sales_${m}.pdf`);
+    });
+
+    $("#logoutOwnerBtn").addEventListener("click", () => {
+      role = null;
+      $("#ownerPanel").classList.add("hidden");
+      $("#loginCard").classList.remove("hidden");
+      $("#roleBadge").textContent = "Logged out";
+    });
+
+    $("#savePwBtn").addEventListener("click", () => {
+      const nWorker = $("#newWorkerPw").value.trim();
+      const nOwner  = $("#newOwnerPw").value.trim();
+      if(!nWorker && !nOwner){ alert("Enter at least one new password."); return; }
+      if(nWorker){ saveJSON(STORAGE_KEYS.workerPw, nWorker); }
+      if(nOwner){ saveJSON(STORAGE_KEYS.ownerPw, nOwner); }
+      $("#newWorkerPw").value = ""; $("#newOwnerPw").value = "";
+      alert("Passwords updated.");
+    });
+
+    // Password reset functionality (moved to owner panel)
+    $("#resetToDefaultsBtn").addEventListener("click", () => {
+      if(confirm("Reset passwords to defaults? (Owner: W0rk! • Worker: M0ses.com)")){
+        saveJSON(STORAGE_KEYS.workerPw, "M0ses.com");
+        saveJSON(STORAGE_KEYS.ownerPw, "W0rk!");
+        alert("Passwords reset to defaults.");
+      }
+    });
+
+    // on load set default date inputs
+    window.addEventListener("load", () => {
+      const d = new Date();
+      $("#saleDate").value = d.toISOString().slice(0,10);
+      $("#filterMonth").value = d.toISOString().slice(0,7);
+    });
+  </script>
+</body>
+</html>
